@@ -64,7 +64,7 @@ angular.module( 'ui.bootstrap.tooltip', [ 'ui.bootstrap.position', 'ui.bootstrap
    * Returns the actual instance of the $tooltip service.
    * TODO support multiple triggers
    */
-  this.$get = [ '$window', '$compile', '$timeout', '$parse', '$document', '$position', '$interpolate', function ( $window, $compile, $timeout, $parse, $document, $position, $interpolate ) {
+  this.$get = [ '$window', '$compile', '$timeout', '$parse', '$document', '$position', '$interpolate', '$q', function ( $window, $compile, $timeout, $parse, $document, $position, $interpolate, $q ) {
     return function $tooltip ( type, prefix, defaultTriggerShow ) {
       var options = angular.extend( {}, defaultOptions, globalOptions );
 
@@ -225,32 +225,44 @@ angular.module( 'ui.bootstrap.tooltip', [ 'ui.bootstrap.position', 'ui.bootstrap
           
           // Hide the tooltip popup element.
           function hide() {
+            var deferred = $q.defer();
+
             // First things first: we don't show it anymore.
             scope.tt_isOpen = false;
 
             //if tooltip is going to be shown after delay, we must cancel this
             $timeout.cancel( popupTimeout );
-            
+
             // And now we remove it from the DOM. However, if we have animation, we 
             // need to wait for it to expire beforehand.
             // FIXME: this is a placeholder for a port of the transitions library.
             if ( scope.tt_animation ) {
               transitionTimeout = $timeout(function () {
                 tooltip.remove();
+                deferred.resolve();
               }, 500);
             } else {
               tooltip.remove();
+              deferred.resolve();
             }
+            
+            return deferred.promise;
           }
 
           /**
            * Observe the relevant attributes.
            */
           attrs.$observe( type, function ( val ) {
-            scope.tt_content = val;
-
-            if (!val && scope.tt_isOpen ) {
-              hide();
+            if (scope.tt_isOpen){
+              hide().then(function(){
+                scope.tt_content = val;
+                if (val){
+                  $timeout(show, 0);
+                }
+              });
+            }
+            else {
+              scope.tt_content = val;
             }
           });
 
